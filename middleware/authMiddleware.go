@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"jwt-project/helper"
+	"jwt-project/middleware/token"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,13 +17,21 @@ func Autheticate() gin.HandlerFunc {
 			return
 		}
 
-		claims, _ := helper.ValidateToken(clientToken)
+		claims, msg := token.ValidateToken(clientToken)
+		if msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		}
 
-		c.Set("first_name", claims.FirstName)
-		c.Set("last_name", claims.LastName)
-		c.Set("email", claims.Email)
-		c.Set("usertype", claims.UserType)
-		c.Set("uid", claims.Uid)
+		setContextClaims(c, claims)
 		c.Next()
 	}
+}
+
+func setContextClaims(c *gin.Context, claims *token.SignedDetails) {
+	c.Set("first_name", claims.FirstName)
+	c.Set("last_name", claims.LastName)
+	c.Set("email", claims.Email)
+	c.Set("usertype", claims.UserType)
+	c.Set("uid", claims.Uid)
+	c.Next()
 }

@@ -10,6 +10,6 @@ import (
 
 func PersonRoutes(routes *gin.Engine) {
 	routes.Use(middleware.Autheticate())
-	routes.GET("/person/:userid", controller.GetUser())
-	routes.GET("/personall", controller.GetUsers())
+	routes.GET("/person/:userid", controller.GetUser)
+	routes.GET("/personall", controller.GetUsers)
 }

@@ -1,16 +1,18 @@
-package helper
+package token
 
 import (
 	"context"
-	"jwt-project/database"
+	"errors"
 	"log"
-	"os"
 	"time"
+
+	"jwt-project/database"
+
+	"jwt-project/common/env"
 
 	"github.com/dgrijalva/jwt-go"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -23,10 +25,11 @@ type SignedDetails struct {
 	jwt.StandardClaims
 }
 
-var personCollection *mongo.Collection = database.Collection(database.MongoClient, "table")
-var SECRET_KEY string = os.Getenv("SECRET_KEY")
+func keyFunction(token *jwt.Token) (interface{}, error) {
+	return []byte(env.SECRET_KEY), nil
+}
 
-func GenerateAllTokens(firstName string, lastName string, email string, userType string, uid string) (signedToken string, signedRefreshToken string) {
+func GenerateToken(firstName string, lastName string, email string, userType string, uid string) (string, string, error) {
 	claims := &SignedDetails{
 		FirstName: firstName,
 		LastName:  lastName,
@@ -44,29 +47,26 @@ func GenerateAllTokens(firstName string, lastName string, email string, userType
 		},
 	}
 
-	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(SECRET_KEY))
-	refreshToken, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString([]byte(SECRET_KEY))
+	token, errToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(env.SECRET_KEY))
+	refreshToken, errRefreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString([]byte(env.SECRET_KEY))
 
-	return token, refreshToken
+	if (errToken != nil) && (errRefreshToken != nil) {
+		return "", "", errors.New("error GenerateToken")
+	}
+
+	return token, refreshToken, nil
 }
 
 func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 	token, _ := jwt.ParseWithClaims(
 		signedToken,
 		&SignedDetails{},
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(SECRET_KEY), nil
-		},
+		keyFunction,
 	)
 
 	claims, ok := token.Claims.(*SignedDetails)
 	if !ok {
 		msg = "token is invalid"
-		return
-	}
-
-	if claims.ExpiresAt < time.Now().Local().Unix() {
-		msg = "token is expired"
 		return
 	}
 
@@ -89,7 +89,7 @@ func UpdateAllTokens(signedToken string, signedRefreshToken string, userId strin
 		Upsert: &upsert,
 	}
 
-	_, err := personCollection.UpdateOne(
+	_, err := database.Collection(database.Connect(), "table").UpdateOne(
 		ctx,
 		filter,
 		bson.D{
